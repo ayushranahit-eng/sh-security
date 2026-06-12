@@ -21,6 +21,22 @@
 | Prompt injection or LLM runtime testing | Requires live endpoints and app context |
 | Business logic and attack chaining | Requires active pentesting and human context |
 
+
+## Official Client Command
+
+Go inside the client project/repository folder, then run only this:
+
+```bash
+SCAN_API_TOKEN="TOKEN" bash <(curl -fsSL SCANNER_URL/run.sh)
+```
+
+For this deployment:
+
+```bash
+SCAN_API_TOKEN="TOKEN" bash <(curl -fsSL https://sh-security-production.up.railway.app/run.sh)
+```
+
+Only `TOKEN` changes per client.
 ## Client Usage
 
 Run inside the client repository:

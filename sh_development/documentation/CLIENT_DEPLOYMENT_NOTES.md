@@ -1,5 +1,30 @@
 # Client Deployment Notes
 
+## Official Client Command
+
+Tell the client:
+
+```text
+Go inside your project/repository folder and run this command.
+```
+
+```bash
+SCAN_API_TOKEN="TOKEN" bash <(curl -fsSL SCANNER_URL/run.sh)
+```
+
+For our current Railway deployment:
+
+```bash
+SCAN_API_TOKEN="TOKEN" bash <(curl -fsSL https://sh-security-production.up.railway.app/run.sh)
+```
+
+Only one value changes per client:
+
+```text
+TOKEN
+```
+
+The scanner runs in the current folder, creates a dated JSON report, uploads it when the token is valid, and removes temporary runner files.
 ## Basic Client Usage
 
 Client SSHs into their server or CI runner and runs:
