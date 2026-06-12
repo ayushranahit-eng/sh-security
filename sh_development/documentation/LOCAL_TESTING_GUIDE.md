@@ -104,3 +104,13 @@ If `.sh` does not run:
 ```text
 Use Git Bash or Linux/WSL. Normal Windows Command Prompt cannot run .sh scripts.
 ```
+
+## Testing The Hosted Runner Locally
+
+After starting the local server on port 8000, go to a test repo and run:
+
+```bash
+SCAN_API_TOKEN="dev-token" bash <(curl -fsSL http://localhost:8000/run.sh)
+```
+
+This tests the same flow that a client will use against Railway or production.

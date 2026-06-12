@@ -88,3 +88,37 @@ osv-scanner
 ```
 
 Git Bash on Windows is useful for local testing, but real client deployments should prefer Linux servers or CI runners.
+
+## Simple One-Command Client Flow
+
+This is the easiest client workflow. The client only SSHs into the server, goes to the website/app folder, and runs one command.
+
+CloudPanel example path:
+
+```bash
+cd /home/<site-user>/htdocs/<domain>
+SCAN_API_TOKEN="client-token" bash <(curl -fsSL https://sh-security-production.up.railway.app/run.sh)
+```
+
+For example:
+
+```bash
+cd /home/siteuser/htdocs/example.com
+SCAN_API_TOKEN="client-token" bash <(curl -fsSL https://sh-security-production.up.railway.app/run.sh)
+```
+
+The hosted `run.sh` script downloads the scanner files into `.scan-sh-runner/`, runs the scan, writes the dated JSON report, uploads it if a token is present, and removes `.scan-sh-runner/` at the end.
+
+The client does not need to clone your GitHub repository. They only need `bash`, `curl`, and `python3`. Semgrep is installed automatically with `pip --user` when possible; if that fails, built-in checks still run.
+
+Use this when you want high/critical findings to fail CI:
+
+```bash
+SCAN_API_TOKEN="client-token" SCAN_ARGS="--fail-on high --clean" bash <(curl -fsSL https://sh-security-production.up.railway.app/run.sh)
+```
+
+Use this when the client wants the report to stay only on their server:
+
+```bash
+bash <(curl -fsSL https://sh-security-production.up.railway.app/run.sh)
+```

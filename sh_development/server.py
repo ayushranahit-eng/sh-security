@@ -7,7 +7,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import FastAPI, Header, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -19,7 +19,7 @@ API_TOKEN = os.environ.get("SCAN_API_TOKEN", "change-me")
 app = FastAPI(
     title="scan.sh rule and report server",
     version="0.1.0",
-    description="Serves static scanner rules and accepts optional scan report uploads.",
+    description="Serves static scanner rules, scanner scripts, and accepts optional scan report uploads.",
 )
 
 
@@ -36,6 +36,97 @@ def semgrep_rules() -> FileResponse:
 @app.get("/dist/iac-rules.yml")
 def iac_rules() -> FileResponse:
     return FileResponse(DIST_DIR / "iac-rules.yml", media_type="text/yaml")
+
+
+@app.get("/scan.sh")
+def scan_script() -> FileResponse:
+    return FileResponse(BASE_DIR / "scan.sh", media_type="text/x-shellscript")
+
+
+@app.get("/merge_report.py")
+def merge_report_script() -> FileResponse:
+    return FileResponse(BASE_DIR / "merge_report.py", media_type="text/x-python")
+
+
+@app.get("/find_exposed_files.sh")
+def exposed_files_script() -> FileResponse:
+    return FileResponse(BASE_DIR / "find_exposed_files.sh", media_type="text/x-shellscript")
+
+
+def build_runner_script(base_url: str) -> str:
+    base_url = base_url.rstrip("/")
+    return f'''#!/usr/bin/env bash
+set -u
+
+BASE_URL="${{BASE_URL:-{base_url}}}"
+RUNNER_DIR="${{SCAN_RUNNER_DIR:-.scan-sh-runner}}"
+SCAN_ARGS="${{SCAN_ARGS:---fail-on never --clean}}"
+SKIP_SEMGREP_INSTALL="${{SKIP_SEMGREP_INSTALL:-0}}"
+
+log() {{
+  printf '[scan.sh installer] %s\n' "$*" >&2
+}}
+
+have() {{
+  command -v "$1" >/dev/null 2>&1
+}}
+
+find_python() {{
+  for candidate in python3 python; do
+    if have "$candidate" && "$candidate" -c "import sys" >/dev/null 2>&1; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}}
+
+download() {{
+  url="$1"
+  dest="$2"
+  curl -fsSL "$url" -o "$dest"
+}}
+
+if ! have curl; then
+  log "curl is required but was not found."
+  exit 2
+fi
+
+PYTHON_BIN="$(find_python || true)"
+if [ -z "$PYTHON_BIN" ]; then
+  log "Python 3 is required but was not found."
+  exit 2
+fi
+
+mkdir -p "$RUNNER_DIR"
+download "$BASE_URL/scan.sh" "$RUNNER_DIR/scan.sh"
+download "$BASE_URL/merge_report.py" "$RUNNER_DIR/merge_report.py"
+download "$BASE_URL/find_exposed_files.sh" "$RUNNER_DIR/find_exposed_files.sh"
+chmod +x "$RUNNER_DIR/scan.sh" "$RUNNER_DIR/find_exposed_files.sh"
+
+if ! have semgrep && [ "$SKIP_SEMGREP_INSTALL" != "1" ]; then
+  log "Semgrep not found. Trying user install with pip."
+  "$PYTHON_BIN" -m pip install --user semgrep >/dev/null 2>&1 || log "Semgrep install failed; scan will continue with built-in checks."
+  export PATH="$HOME/.local/bin:$PATH"
+fi
+
+log "Running scan in $(pwd)"
+BASE_URL="$BASE_URL" "$RUNNER_DIR/scan.sh" $SCAN_ARGS
+SCAN_EXIT=$?
+
+rm -rf -- "$RUNNER_DIR"
+exit "$SCAN_EXIT"
+'''
+
+
+@app.get("/run.sh")
+def run_script(request: Request) -> PlainTextResponse:
+    return PlainTextResponse(build_runner_script(str(request.base_url)), media_type="text/x-shellscript")
+
+
+@app.get("/install.sh")
+def install_script(request: Request) -> PlainTextResponse:
+    return PlainTextResponse(build_runner_script(str(request.base_url)), media_type="text/x-shellscript")
 
 
 def require_auth(authorization: str | None) -> None:

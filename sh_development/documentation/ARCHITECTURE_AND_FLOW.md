@@ -109,3 +109,17 @@ GET /api/report/{id}
 ```
 
 The scanner can also run offline if tools and rules are already present.
+
+## Hosted Runner Endpoints
+
+The server also exposes the scanner files directly:
+
+```text
+GET /scan.sh
+GET /merge_report.py
+GET /find_exposed_files.sh
+GET /run.sh
+GET /install.sh
+```
+
+`/run.sh` and `/install.sh` return the same small bootstrap script. That script downloads the scanner into a temporary `.scan-sh-runner/` folder inside the client project, runs the scan, then deletes that temporary runner folder. The scan report remains as `security-report-YYYYMMDD-HHMMSS.json`.

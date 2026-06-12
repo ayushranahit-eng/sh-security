@@ -121,3 +121,43 @@ CloudPanel production deployment:
 - `semgrep` is expected to be installed on the client machine or CI image.
 - `merge_report.py` uses only the Python 3 standard library.
 - `find_exposed_files.sh` uses Bash plus Python 3 standard library.
+
+## One-Command Hosted Usage
+
+After Railway/production deployment, a client can run the scanner without manually uploading scanner files.
+
+CloudPanel example:
+
+```bash
+cd /home/<site-user>/htdocs/<domain>
+SCAN_API_TOKEN="client-token" bash <(curl -fsSL https://sh-security-production.up.railway.app/run.sh)
+```
+
+What this does:
+
+```text
+1. Downloads scan.sh, merge_report.py, and find_exposed_files.sh into .scan-sh-runner/
+2. Downloads rules from your deployed scanner server
+3. Runs the scan in the current client project folder
+4. Saves security-report-YYYYMMDD-HHMMSS.json
+5. Uploads the report only if SCAN_API_TOKEN is provided
+6. Deletes the temporary .scan-sh-runner/ folder when done
+```
+
+Use stricter CI/client gating:
+
+```bash
+SCAN_API_TOKEN="client-token" SCAN_ARGS="--fail-on high --clean" bash <(curl -fsSL https://sh-security-production.up.railway.app/run.sh)
+```
+
+Run without uploading the report:
+
+```bash
+bash <(curl -fsSL https://sh-security-production.up.railway.app/run.sh)
+```
+
+If Semgrep install is not allowed on the server:
+
+```bash
+SKIP_SEMGREP_INSTALL=1 bash <(curl -fsSL https://sh-security-production.up.railway.app/run.sh)
+```
