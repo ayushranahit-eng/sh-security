@@ -53,13 +53,19 @@ def exposed_files_script() -> FileResponse:
     return FileResponse(BASE_DIR / "find_exposed_files.sh", media_type="text/x-shellscript")
 
 
+def public_base_url(request: Request) -> str:
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme).split(",")[0].strip()
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc)).split(",")[0].strip()
+    return f"{proto}://{host}"
+
+
 def build_runner_script(base_url: str) -> str:
     base_url = base_url.rstrip("/")
     return f'''#!/usr/bin/env bash
 set -u
 
 BASE_URL="${{BASE_URL:-{base_url}}}"
-RUNNER_DIR="${{SCAN_RUNNER_DIR:-.scan-sh-runner}}"
+RUNNER_DIR="${{SCAN_RUNNER_DIR:-${{TMPDIR:-/tmp}}/scan-sh-runner.$$}}"
 SCAN_ARGS="${{SCAN_ARGS:---fail-on never --clean}}"
 SKIP_SEMGREP_INSTALL="${{SKIP_SEMGREP_INSTALL:-0}}"
 
@@ -98,6 +104,7 @@ if [ -z "$PYTHON_BIN" ]; then
   exit 2
 fi
 
+rm -rf -- "$RUNNER_DIR"
 mkdir -p "$RUNNER_DIR"
 download "$BASE_URL/scan.sh" "$RUNNER_DIR/scan.sh"
 download "$BASE_URL/merge_report.py" "$RUNNER_DIR/merge_report.py"
@@ -121,12 +128,12 @@ exit "$SCAN_EXIT"
 
 @app.get("/run.sh")
 def run_script(request: Request) -> PlainTextResponse:
-    return PlainTextResponse(build_runner_script(str(request.base_url)), media_type="text/x-shellscript")
+    return PlainTextResponse(build_runner_script(public_base_url(request)), media_type="text/x-shellscript")
 
 
 @app.get("/install.sh")
 def install_script(request: Request) -> PlainTextResponse:
-    return PlainTextResponse(build_runner_script(str(request.base_url)), media_type="text/x-shellscript")
+    return PlainTextResponse(build_runner_script(public_base_url(request)), media_type="text/x-shellscript")
 
 
 def require_auth(authorization: str | None) -> None:
