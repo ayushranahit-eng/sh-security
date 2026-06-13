@@ -207,13 +207,16 @@ find_python() {{
 download() {{
   url="$1"
   dest="$2"
-  curl -fsSL "$url" -o "$dest"
+  if have curl; then
+    curl -fsSL "$url" -o "$dest"
+    return $?
+  fi
+  "$PYTHON_BIN" - "$url" "$dest" <<'PY'
+import sys
+import urllib.request
+urllib.request.urlretrieve(sys.argv[1], sys.argv[2])
+PY
 }}
-
-if ! have curl; then
-  log "curl is required but was not found."
-  exit 2
-fi
 
 PYTHON_BIN="$(find_python || true)"
 if [ -z "$PYTHON_BIN" ]; then
@@ -374,3 +377,4 @@ def get_report(report_id: str, authorization: str | None = Header(default=None))
             if record.get("id") == report_id:
                 return JSONResponse(record)
     raise HTTPException(status_code=404, detail="Report not found")
+
