@@ -90,7 +90,7 @@ Recommended:
 ```text
 bash
 python 3
-curl
+curl or wget
 semgrep
 ```
 
@@ -112,7 +112,9 @@ gitleaks
 osv-scanner
 ```
 
-Git Bash on Windows is useful for local testing, but real client deployments should prefer Linux servers or CI runners.
+Git Bash on Windows is useful for local testing, but real client deployments should prefer Linux SSH servers or CI runners.
+
+Most root/VPS hosting environments such as CloudPanel, Hostinger VPS, cPanel terminal, Ubuntu, Debian, AlmaLinux, and CentOS provide Linux with `bash`. If `curl` is missing, the hosted runner can download with `wget` or Python 3 instead. If `bash` itself is missing, the scanner cannot run because `scan.sh` is a Bash script; install Bash or run it from a normal Linux/CI environment.
 
 ## Simple One-Command Client Flow
 

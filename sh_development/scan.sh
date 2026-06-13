@@ -133,9 +133,53 @@ download_file() {
   fi
   if have curl; then
     curl -fsSL "$url" -o "$tmp" && mv "$tmp" "$dest"
+  elif have wget; then
+    wget -qO "$tmp" "$url" && mv "$tmp" "$dest"
+  elif [ -n "$PYTHON_BIN" ]; then
+    "$PYTHON_BIN" - "$url" "$tmp" <<'PY' && mv "$tmp" "$dest"
+import sys
+import urllib.request
+
+urllib.request.urlretrieve(sys.argv[1], sys.argv[2])
+PY
   else
     return 1
   fi
+}
+
+upload_report() {
+  report_path="$1"
+  if have curl; then
+    upload_args=()
+    if [ -n "$SCAN_ID" ]; then
+      upload_args+=( -H "X-Scan-Id: $SCAN_ID" )
+    fi
+    curl -fsSL -X POST "$BASE_URL/api/report" \
+      -H "Authorization: Bearer $SCAN_API_TOKEN" \
+      -H "Content-Type: application/json" \
+      "${upload_args[@]}" \
+      --data-binary "@$report_path" >/dev/null
+    return $?
+  fi
+
+  [ -n "$PYTHON_BIN" ] || return 1
+  "$PYTHON_BIN" - "$BASE_URL/api/report" "$SCAN_API_TOKEN" "$SCAN_ID" "$report_path" <<'PY'
+import sys
+import urllib.request
+
+url, token, scan_id, report_path = sys.argv[1:]
+with open(report_path, "rb") as handle:
+    data = handle.read()
+
+request = urllib.request.Request(url, data=data, method="POST")
+request.add_header("Authorization", f"Bearer {token}")
+request.add_header("Content-Type", "application/json")
+if scan_id:
+    request.add_header("X-Scan-Id", scan_id)
+
+with urllib.request.urlopen(request, timeout=60) as response:
+    response.read()
+PY
 }
 
 refresh_rule() {
@@ -341,18 +385,10 @@ else
   notify_scan "merge" "failed" "Report generation failed" "merge_report.py"
 fi
 
-if [ "$OFFLINE" -eq 0 ] && [ -n "${SCAN_API_TOKEN:-}" ] && have curl; then
+if [ "$OFFLINE" -eq 0 ] && [ -n "${SCAN_API_TOKEN:-}" ]; then
   notify_scan "upload" "running" "Uploading report to server" "upload"
   log "Uploading report to $BASE_URL/api/report"
-  upload_args=()
-  if [ -n "$SCAN_ID" ]; then
-    upload_args+=( -H "X-Scan-Id: $SCAN_ID" )
-  fi
-  if curl -fsSL -X POST "$BASE_URL/api/report" \
-    -H "Authorization: Bearer $SCAN_API_TOKEN" \
-    -H "Content-Type: application/json" \
-    "${upload_args[@]}" \
-    --data-binary "@$REPORT_FILE" >/dev/null; then
+  if upload_report "$REPORT_FILE"; then
     notify_scan "upload" "completed" "Report uploaded successfully" "upload"
   else
     log "Report upload failed"

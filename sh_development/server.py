@@ -106,9 +106,18 @@ def build_scan_commands(base_url: str, scan_id: str, website_url: str = "") -> d
     clean_url = website_url.replace('"', "")
     target_env = f' SCAN_TARGET_URL="{clean_url}"' if clean_url else ""
     scan_token = API_TOKEN if API_TOKEN and API_TOKEN != "change-me" else "TOKEN"
+    linux_env = f'SCAN_API_TOKEN="{scan_token}" SCAN_ID="{scan_id}"{target_env}'
+    linux_runner = (
+        'u="' + base_url + '/run.sh"; '
+        "t=\"${TMPDIR:-/tmp}/scan-sh-runner.$$\"; "
+        "if command -v curl >/dev/null 2>&1; then curl -fsSL \"$u\" -o \"$t\"; "
+        "elif command -v wget >/dev/null 2>&1; then wget -qO \"$t\" \"$u\"; "
+        "else p=\"$(command -v python3 || command -v python)\" && \"$p\" -c \"import sys, urllib.request; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])\" \"$u\" \"$t\"; "
+        "fi && bash \"$t\"; s=$?; rm -f \"$t\"; exit \"$s\""
+    )
     linux = (
-        f'SCAN_API_TOKEN="{scan_token}" SCAN_ID="{scan_id}"{target_env} '
-        f'bash <(curl -fsSL {base_url}/run.sh)'
+        f"{linux_env} "
+        f"bash -c '{linux_runner}'"
     )
     powershell = (
         f'$env:SCAN_API_TOKEN="{scan_token}"; $env:SCAN_ID="{scan_id}";'
@@ -125,7 +134,7 @@ def build_scan_commands(base_url: str, scan_id: str, website_url: str = "") -> d
         "git_bash": linux,
         "powershell": powershell,
         "cmd": cmd,
-        "notes": "Windows commands assume curl.exe and bash are available, such as Git Bash installed on the machine.",
+        "notes": "Production Linux/hosting servers should use the Linux command. It uses curl, wget, or Python 3 to download the runner. Windows commands require bash, such as Git Bash, plus curl.exe.",
     }
 
 
@@ -209,6 +218,10 @@ download() {{
   dest="$2"
   if have curl; then
     curl -fsSL "$url" -o "$dest"
+    return $?
+  fi
+  if have wget; then
+    wget -qO "$dest" "$url"
     return $?
   fi
   "$PYTHON_BIN" - "$url" "$dest" <<'PY'

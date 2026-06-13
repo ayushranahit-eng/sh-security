@@ -37,6 +37,8 @@ SCAN_API_TOKEN="TOKEN" bash <(curl -fsSL https://sh-security-production.up.railw
 ```
 
 Only `TOKEN` changes per client.
+
+Most shared/VPS hosting panels such as CloudPanel, Hostinger VPS, cPanel terminal, and CI runners provide a Linux shell. The dashboard's Linux command is the standard client command. It only needs `bash`, Python 3, and one downloader (`curl`, `wget`, or Python's standard library fallback). Windows/Git Bash commands are mainly for local testing on Windows machines.
 ## Client Usage
 
 Run inside the client repository:
