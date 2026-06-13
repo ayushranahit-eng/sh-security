@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Security Assessment Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./app.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+</head>
+
+<body>
+  <div class="page-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Confidential client deliverable</p>
+        <h1>Security Assessment Report</h1>
+        <p class="subtle" id="headerProject">No scan loaded yet</p>
+      </div>
+      <div class="header-meta">
+        <div>
+          <span class="meta-label">Generated</span>
+          <strong id="headerGenerated">Waiting for report</strong>
+        </div>
+        <div>
+          <span class="meta-label">Report File</span>
+          <strong id="headerReportFile">Not available</strong>
+        </div>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel launch-panel">
+        <div class="panel-header">
+          <div>
+            <h2>Launch Scan</h2>
+            <p>Create a scan session, copy the command, then let the client run it in their repository folder.</p>
+          </div>
+        </div>
+        <div class="launch-grid launch-grid-compact">
+          <label>
+            <span>Website URL</span>
+            <input id="websiteUrlInput" type="url" placeholder="https://example.com">
+          </label>
+          <div class="actions-row">
+            <button class="button primary" id="createScanButton" type="button">Create scan session</button>
+            <button class="button ghost" id="refreshScanButton" type="button">Refresh session</button>
+          </div>
+        </div>
+        <div class="session-strip" id="sessionStrip">
+          <div>
+            <span class="meta-label">Scan ID</span>
+            <strong id="scanIdValue">Not created</strong>
+          </div>
+          <div>
+            <span class="meta-label">Status</span>
+            <strong id="scanStatusValue">Idle</strong>
+          </div>
+          <div>
+            <span class="meta-label">Last Update</span>
+            <strong id="scanUpdatedValue">-</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel command-panel">
+        <div class="panel-header compact">
+          <div>
+            <h2>Client Command</h2>
+            <p>Client goes to their repo folder, then runs the matching command.</p>
+          </div>
+          <div class="tab-row" id="commandTabs"></div>
+        </div>
+        <div class="command-box">
+          <pre id="commandOutput">Create a scan session to generate a command.</pre>
+          <button class="button ghost" id="copyCommandButton" type="button">Copy command</button>
+        </div>
+        <p class="subtle" id="commandNote">Windows commands assume curl and bash are available.</p>
+      </section>
+
+      <section class="panel live-panel">
+        <div class="panel-header compact">
+          <div>
+            <h2>Live Scan Activity</h2>
+            <p>Simple progress updates for the client while the scan runs.</p>
+          </div>
+          <strong class="status-badge neutral" id="pollingBadge">Waiting</strong>
+        </div>
+        <div class="timeline timeline-fixed" id="timelineContainer">
+          <div class="empty-state">No scan activity yet.</div>
+        </div>
+      </section>
+
+      <section class="summary-grid" id="summaryGrid">
+        <article class="metric-card total"><span>Total findings</span><strong id="metricTotal">0</strong></article>
+        <article class="metric-card critical"><span>Critical</span><strong id="metricCritical">0</strong></article>
+        <article class="metric-card high"><span>High</span><strong id="metricHigh">0</strong></article>
+        <article class="metric-card medium"><span>Medium</span><strong id="metricMedium">0</strong></article>
+        <article class="metric-card low"><span>Low</span><strong id="metricLow">0</strong></article>
+      </section>
+
+      <section class="charts-grid">
+        <article class="panel chart-panel">
+          <div class="panel-header compact">
+            <div>
+              <h2>Severity Breakdown</h2>
+              <p>Overall balance of critical, high, medium, and low findings.</p>
+            </div>
+          </div>
+          <div class="chart-wrap"><canvas id="severityChart"></canvas></div>
+          <div class="legend-list" id="severityLegend"></div>
+        </article>
+        <article class="panel chart-panel">
+          <div class="panel-header compact">
+            <div>
+              <h2>Findings by Category</h2>
+              <p>Sorted by volume across secrets, auth, CI/CD, config, IaC, and SAST.</p>
+            </div>
+          </div>
+          <div class="chart-wrap"><canvas id="categoryChart"></canvas></div>
+        </article>
+      </section>
+
+      <section class="panel overview-panel">
+        <div class="panel-header compact">
+          <div>
+            <h2>Codebase Overview</h2>
+            <p>Static inventory of the scanned repository structure and technologies.</p>
+          </div>
+        </div>
+        <div class="overview-grid">
+          <div>
+            <h3>Languages</h3>
+            <div id="languagesTable"></div>
+          </div>
+          <div>
+            <h3>Frameworks</h3>
+            <div class="tag-group" id="frameworkTags"></div>
+            <h3>Package Managers</h3>
+            <div class="tag-group" id="packageManagerTags"></div>
+            <h3>Project Type</h3>
+            <div class="tag-group" id="projectTypeTags"></div>
+          </div>
+          <div>
+            <h3>Directory Structure</h3>
+            <div class="tree tree-fixed" id="directoryTree"></div>
+          </div>
+          <div>
+            <h3>Important Files</h3>
+            <ul class="simple-list" id="importantFilesList"></ul>
+            <h3>Inventory Notes</h3>
+            <ul class="simple-list" id="inventoryNotes"></ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel api-panel">
+        <div class="panel-header compact">
+          <div>
+            <h2>API Inventory</h2>
+            <p>Sortable route list detected statically from source files.</p>
+          </div>
+          <label class="search-inline">
+            <span>Filter</span>
+            <input id="apiSearchInput" type="search" placeholder="Search path, file, method">
+          </label>
+        </div>
+        <div class="table-wrap api-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th data-api-sort="method">Method</th>
+                <th data-api-sort="path">Path</th>
+                <th data-api-sort="file">File</th>
+                <th data-api-sort="line">Line</th>
+                <th data-api-sort="framework_hint">Framework</th>
+              </tr>
+            </thead>
+            <tbody id="apiTableBody">
+              <tr>
+                <td colspan="5" class="empty-cell">No API inventory loaded.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="critical-grid" id="criticalHighlights"></section>
+
+      <section class="panel findings-panel">
+        <div class="panel-header compact">
+          <div>
+            <h2>Findings</h2>
+            <p>Filter and expand findings for full evidence, note, and remediation.</p>
+          </div>
+          <strong id="resultsCount">0 results</strong>
+        </div>
+        <div class="filters-grid">
+          <label>
+            <span>Search</span>
+            <input id="findingsSearchInput" type="search" placeholder="Search title, file, evidence">
+          </label>
+          <label>
+            <span>Severity</span>
+            <select id="severityFilter">
+              <option value="all">All severities</option>
+              <option value="critical">Critical</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </label>
+          <label>
+            <span>Category</span>
+            <select id="categoryFilter">
+              <option value="all">All categories</option>
+            </select>
+          </label>
+        </div>
+        <div class="table-wrap findings-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th data-findings-sort="severity">Severity</th>
+                <th data-findings-sort="category">Category</th>
+                <th data-findings-sort="title">Title</th>
+                <th data-findings-sort="file">File</th>
+                <th data-findings-sort="line">Line</th>
+                <th data-findings-sort="tool">Tool</th>
+              </tr>
+            </thead>
+            <tbody id="findingsTableBody">
+              <tr>
+                <td colspan="6" class="empty-cell">No findings loaded.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer class="watermark">Confidential</footer>
+  <script src="./app.js"></script>
+</body>
+
+</html>
