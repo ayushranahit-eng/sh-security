@@ -77,3 +77,23 @@ Each finding has:
 }
 ```
 
+
+## Codebase Overview
+
+Reports now start with a `codebase` section before vulnerability findings:
+
+```json
+"codebase": {
+  "directories": ["frontend", "backend", "infra"],
+  "important_files": ["package.json", "requirements.txt", "Dockerfile"],
+  "languages": [{"name": "Python", "files": 6}],
+  "project_type": ["Node.js", "Python", "Docker"],
+  "detected_frameworks": ["React", "Express", "FastAPI"],
+  "package_managers": ["npm/yarn/pnpm", "pip/poetry/pipenv"],
+  "apis": [
+    {"method": "GET", "path": "/api/users", "file": "backend/api/main.py", "line": 12, "framework_hint": "FastAPI"}
+  ]
+}
+```
+
+This is static best-effort detection. It reads source files and common route patterns, but it does not run the application and does not make HTTP requests.

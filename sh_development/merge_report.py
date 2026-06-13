@@ -7,6 +7,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
 import sys
 from typing import Any
 
@@ -298,6 +299,179 @@ def parse_custom(path: str) -> list[dict[str, Any]]:
     ) for item in data.get("findings", [])]
 
 
+SKIP_INVENTORY_DIRS = {
+    ".git", ".scan-sh", ".scan-sh-runner", "node_modules", ".venv", "venv",
+    "__pycache__", ".next", "dist", "build", "coverage", ".cache",
+}
+
+LANGUAGE_EXTENSIONS = {
+    ".py": "Python",
+    ".js": "JavaScript",
+    ".jsx": "JavaScript/React",
+    ".ts": "TypeScript",
+    ".tsx": "TypeScript/React",
+    ".php": "PHP",
+    ".rb": "Ruby",
+    ".go": "Go",
+    ".java": "Java",
+    ".cs": "C#",
+    ".tf": "Terraform",
+    ".yml": "YAML",
+    ".yaml": "YAML",
+    ".json": "JSON",
+    ".sh": "Shell",
+    ".html": "HTML",
+    ".css": "CSS",
+}
+
+IMPORTANT_FILE_NAMES = {
+    "package.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
+    "requirements.txt", "poetry.lock", "Pipfile", "pyproject.toml",
+    "composer.json", "Gemfile", "go.mod", "pom.xml", "build.gradle",
+    "Dockerfile", "docker-compose.yml", "docker-compose.yaml",
+    ".gitlab-ci.yml", "Jenkinsfile", "main.tf", "serverless.yml",
+}
+
+
+def safe_read_text(path: str, limit: int = 120000) -> str:
+    try:
+        with open(path, "r", encoding="utf-8", errors="ignore") as handle:
+            return handle.read(limit)
+    except OSError:
+        return ""
+
+
+def add_unique(items: list[str], value: str, limit: int = 80) -> None:
+    if value and value not in items and len(items) < limit:
+        items.append(value)
+
+
+def detect_frameworks(rel_path: str, name: str, text: str, frameworks: list[str]) -> None:
+    lower_text = text.lower()
+    lower_name = name.lower()
+    if lower_name == "package.json":
+        for label, marker in (
+            ("React", "react"), ("Next.js", "next"), ("Express", "express"),
+            ("NestJS", "@nestjs"), ("Vue", "vue"), ("Angular", "@angular"),
+        ):
+            if marker in lower_text:
+                add_unique(frameworks, label)
+    if lower_name in {"requirements.txt", "pyproject.toml", "pipfile"} or rel_path.endswith(".py"):
+        for label, marker in (("Django", "django"), ("Flask", "flask"), ("FastAPI", "fastapi")):
+            if marker in lower_text:
+                add_unique(frameworks, label)
+    if lower_name == "composer.json" and "laravel" in lower_text:
+        add_unique(frameworks, "Laravel")
+
+
+def detect_api_routes(rel_path: str, text: str, apis: list[dict[str, Any]]) -> None:
+    normalized = rel_path.replace("\\", "/")
+    seen = {(item.get("method"), item.get("path"), item.get("file"), item.get("line")) for item in apis}
+
+    def add_api(method: str, route: str, line: int, framework: str) -> None:
+        route = route.strip()
+        if not route or route in {"/", "*"}:
+            return
+        key = (method.upper(), route, normalized, line)
+        if key in seen or len(apis) >= 200:
+            return
+        seen.add(key)
+        apis.append({"method": method.upper(), "path": route, "file": normalized, "line": line, "framework_hint": framework})
+
+    lines = text.splitlines()
+    for line_no, line in enumerate(lines, start=1):
+        compact = line.strip()
+        for match in re.finditer(r"\b(?:app|router)\.(get|post|put|delete|patch|all)\s*\(\s*['\"`]([^'\"`]+)", compact):
+            add_api(match.group(1), match.group(2), line_no, "Express/Node")
+        for match in re.finditer(r"@(?:app|router|api)\.(get|post|put|delete|patch|route)\s*\(\s*['\"]([^'\"]+)", compact):
+            method = match.group(1)
+            if method == "route":
+                methods = re.search(r"methods\s*=\s*\[([^\]]+)\]", compact)
+                if methods:
+                    for found in re.findall(r"['\"]([A-Za-z]+)['\"]", methods.group(1)):
+                        add_api(found, match.group(2), line_no, "Flask/FastAPI")
+                else:
+                    add_api("ANY", match.group(2), line_no, "Flask/FastAPI")
+            else:
+                add_api(method, match.group(2), line_no, "FastAPI")
+        for match in re.finditer(r"\bpath\s*\(\s*['\"]([^'\"]+)", compact):
+            add_api("ANY", "/" + match.group(1).lstrip("/"), line_no, "Django")
+        for match in re.finditer(r"@(GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping|RequestMapping)\s*\(\s*(?:value\s*=\s*)?['\"]([^'\"]+)", compact):
+            method_name = match.group(1).replace("Mapping", "")
+            add_api("ANY" if method_name == "Request" else method_name, match.group(2), line_no, "Spring")
+
+    if "/pages/api/" in f"/{normalized}" or "/app/api/" in f"/{normalized}":
+        route = normalized
+        route = re.sub(r"^.*?/(pages|app)/api/", "/api/", route)
+        route = re.sub(r"/(route|index)\.(js|jsx|ts|tsx)$", "", route)
+        route = re.sub(r"\.(js|jsx|ts|tsx)$", "", route)
+        add_api("ANY", route, 1, "Next.js file route")
+
+
+def build_codebase_inventory(root: str) -> dict[str, Any]:
+    inventory: dict[str, Any] = {
+        "directories": [],
+        "important_files": [],
+        "languages": [],
+        "project_type": [],
+        "detected_frameworks": [],
+        "package_managers": [],
+        "apis": [],
+        "notes": [
+            "This inventory is based on static file and source-code patterns only.",
+            "API routes are best-effort detections and may miss dynamic routes or framework-specific routing.",
+        ],
+    }
+    language_counts: dict[str, int] = {}
+
+    for current, dirs, files in os.walk(root):
+        dirs[:] = [d for d in dirs if d not in SKIP_INVENTORY_DIRS]
+        rel_dir = os.path.relpath(current, root).replace(os.sep, "/")
+        depth = 0 if rel_dir == "." else rel_dir.count("/") + 1
+        if rel_dir != "." and depth <= 2:
+            add_unique(inventory["directories"], rel_dir, 120)
+
+        for name in files:
+            lower = name.lower()
+            if lower.startswith("security-report") and lower.endswith(".json"):
+                continue
+            path = os.path.join(current, name)
+            rel_path = os.path.relpath(path, root).replace(os.sep, "/")
+            base, ext = os.path.splitext(name)
+            if name in IMPORTANT_FILE_NAMES or lower in IMPORTANT_FILE_NAMES or rel_path.startswith(".github/workflows/"):
+                add_unique(inventory["important_files"], rel_path, 120)
+            language = LANGUAGE_EXTENSIONS.get(ext.lower()) or ("Docker" if lower == "dockerfile" else "")
+            if language:
+                language_counts[language] = language_counts.get(language, 0) + 1
+            if lower == "package.json":
+                add_unique(inventory["project_type"], "Node.js")
+                add_unique(inventory["package_managers"], "npm/yarn/pnpm")
+            elif lower in {"requirements.txt", "pyproject.toml", "pipfile"}:
+                add_unique(inventory["project_type"], "Python")
+                add_unique(inventory["package_managers"], "pip/poetry/pipenv")
+            elif lower == "composer.json":
+                add_unique(inventory["project_type"], "PHP")
+                add_unique(inventory["package_managers"], "Composer")
+            elif lower == "go.mod":
+                add_unique(inventory["project_type"], "Go")
+            elif lower == "dockerfile" or lower.startswith("docker-compose"):
+                add_unique(inventory["project_type"], "Docker")
+            elif ext.lower() == ".tf":
+                add_unique(inventory["project_type"], "Terraform/IaC")
+            elif rel_path.startswith(".github/workflows/") or lower == ".gitlab-ci.yml":
+                add_unique(inventory["project_type"], "CI/CD")
+
+            if ext.lower() in {".py", ".js", ".jsx", ".ts", ".tsx", ".java", ".php", ".rb"} or lower in {"package.json", "requirements.txt", "pyproject.toml", "pipfile", "composer.json"}:
+                text = safe_read_text(path)
+                detect_frameworks(rel_path, name, text, inventory["detected_frameworks"])
+                detect_api_routes(rel_path, text, inventory["apis"])
+
+    inventory["languages"] = [
+        {"name": name, "files": count}
+        for name, count in sorted(language_counts.items(), key=lambda item: (-item[1], item[0]))[:20]
+    ]
+    return inventory
+
 def summarize(findings: list[dict[str, Any]]) -> dict[str, Any]:
     summary = {key: 0 for key in ("critical", "high", "medium", "low")}
     by_category: dict[str, int] = {}
@@ -311,7 +485,32 @@ def summarize(findings: list[dict[str, Any]]) -> dict[str, Any]:
     return summary
 
 
+def print_codebase_overview(report: dict[str, Any]) -> None:
+    codebase = report.get("codebase", {})
+    if not codebase:
+        return
+    print("")
+    print("Codebase overview")
+    project_type = ", ".join(codebase.get("project_type", [])[:8]) or "Unknown"
+    frameworks = ", ".join(codebase.get("detected_frameworks", [])[:8]) or "None detected"
+    languages = ", ".join(f"{item.get('name')} ({item.get('files')})" for item in codebase.get("languages", [])[:8]) or "Unknown"
+    print(f"Project type: {project_type}")
+    print(f"Frameworks: {frameworks}")
+    print(f"Languages: {languages}")
+    if codebase.get("directories"):
+        print("Main folders: " + ", ".join(codebase["directories"][:12]))
+    if codebase.get("important_files"):
+        print("Important files: " + ", ".join(codebase["important_files"][:12]))
+    apis = codebase.get("apis", [])
+    if apis:
+        print(f"API routes detected: {len(apis)}")
+        for item in apis[:10]:
+            print(f"  {item.get('method', 'ANY'):6} {item.get('path', '')} ({item.get('file', '')}:{item.get('line', 1)})")
+        if len(apis) > 10:
+            print(f"  ... {len(apis) - 10} more API routes in JSON report")
+
 def print_table(report: dict[str, Any]) -> None:
+    print_codebase_overview(report)
     summary = report["summary"]
     print("")
     print("Security scan summary")
@@ -342,6 +541,7 @@ def build_report(args: argparse.Namespace) -> int:
         "scanner": "scan.sh",
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "root": os.getcwd(),
+        "codebase": build_codebase_inventory(os.getcwd()),
         "summary": summarize(findings),
         "tool_errors": TOOL_ERRORS,
         "findings": findings,
