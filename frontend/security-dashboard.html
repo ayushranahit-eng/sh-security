@@ -79,6 +79,10 @@
           <button class="button ghost" id="copyCommandButton" type="button">Copy command</button>
         </div>
         <p class="subtle" id="commandNote">Windows commands assume curl and bash are available.</p>
+        <details class="command-fallback" id="commandFallback" hidden>
+          <summary>Show fallback command</summary>
+          <pre id="commandFallbackOutput"></pre>
+        </details>
       </section>
 
       <section class="panel live-panel">

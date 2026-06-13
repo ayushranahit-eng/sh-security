@@ -34,6 +34,8 @@ const elements = {
   commandTabs: document.getElementById("commandTabs"),
   commandOutput: document.getElementById("commandOutput"),
   commandNote: document.getElementById("commandNote"),
+  commandFallback: document.getElementById("commandFallback"),
+  commandFallbackOutput: document.getElementById("commandFallbackOutput"),
   copyCommandButton: document.getElementById("copyCommandButton"),
   timelineContainer: document.getElementById("timelineContainer"),
   pollingBadge: document.getElementById("pollingBadge"),
@@ -101,6 +103,47 @@ function sortBySeverity(a, b) {
 
 function makeUrl(path) {
   return `${state.apiBase.replace(/\/$/, "")}${path}`;
+}
+
+function parseEnvExports(commandText) {
+  const exportsMap = {};
+  const lines = String(commandText || "").split("\n");
+  for (const line of lines) {
+    const match = line.match(/^export\s+([A-Z0-9_]+)="([^"]*)"$/);
+    if (match) {
+      exportsMap[match[1]] = match[2];
+    }
+  }
+  return exportsMap;
+}
+
+function formatCommandPresentation(mode, commands) {
+  const rawCommand = commands[mode] || "";
+  const base = {
+    primary: rawCommand,
+    fallback: "",
+    note: commands.notes || "Client runs this from inside their repository folder.",
+  };
+
+  if (mode !== "linux") {
+    return base;
+  }
+
+  const env = parseEnvExports(rawCommand);
+  if (!env.SCAN_API_TOKEN || !env.SCAN_ID) {
+    return base;
+  }
+
+  const targetLine = env.SCAN_TARGET_URL ? `export SCAN_TARGET_URL="${env.SCAN_TARGET_URL}"\n` : "";
+  return {
+    primary:
+      `export SCAN_API_TOKEN="${env.SCAN_API_TOKEN}"\n` +
+      `export SCAN_ID="${env.SCAN_ID}"\n` +
+      targetLine +
+      `bash <(curl -fsSL ${state.apiBase.replace(/\/$/, "")}/run.sh)`,
+    fallback: rawCommand,
+    note: "Use this Linux command on standard VPS or SSH servers. Open the fallback command if curl is unavailable.",
+  };
 }
 
 function summarizeEvent(event) {
@@ -198,6 +241,9 @@ function renderSession() {
     elements.scanStatusValue.textContent = "Idle";
     elements.scanUpdatedValue.textContent = "-";
     elements.commandOutput.textContent = "Create a scan session to generate a command.";
+    elements.commandFallback.hidden = true;
+    elements.commandFallback.open = false;
+    elements.commandFallbackOutput.textContent = "";
     elements.commandTabs.innerHTML = "";
     elements.timelineContainer.innerHTML = '<div class="empty-state">No scan activity yet.</div>';
     return;
@@ -230,8 +276,12 @@ function renderCommandTabs(commands) {
   elements.commandTabs.innerHTML = modes.map(([key, label]) => (
     `<button type="button" class="${key === state.commandMode ? "active" : ""}" data-command-mode="${key}">${label}</button>`
   )).join("");
-  elements.commandOutput.textContent = commands[state.commandMode] || "";
-  elements.commandNote.textContent = commands.notes || "Client runs this from inside their repository folder.";
+  const presentation = formatCommandPresentation(state.commandMode, commands);
+  elements.commandOutput.textContent = presentation.primary;
+  elements.commandNote.textContent = presentation.note;
+  elements.commandFallback.hidden = !presentation.fallback;
+  elements.commandFallback.open = false;
+  elements.commandFallbackOutput.textContent = presentation.fallback;
 }
 
 function renderTimeline(events) {
