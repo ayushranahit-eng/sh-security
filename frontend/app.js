@@ -122,7 +122,7 @@ function formatCommandPresentation(mode, commands) {
   const base = {
     primary: rawCommand,
     fallback: "",
-    note: commands.notes || "Client runs this from inside their repository folder.",
+    note: commands.notes || "Run this from inside the project folder on the server.",
   };
 
   if (mode !== "linux") {
@@ -142,7 +142,7 @@ function formatCommandPresentation(mode, commands) {
       targetLine +
       `bash <(curl -fsSL ${state.apiBase.replace(/\/$/, "")}/run.sh)`,
     fallback: rawCommand,
-    note: "Use this Linux command on standard VPS or SSH servers. Open the fallback command if curl is unavailable.",
+    note: "Use this on a Linux server or SSH terminal. Open the alternative method if curl is unavailable.",
   };
 }
 
@@ -240,7 +240,7 @@ function renderSession() {
     elements.scanIdValue.textContent = "Not created";
     elements.scanStatusValue.textContent = "Idle";
     elements.scanUpdatedValue.textContent = "-";
-    elements.commandOutput.textContent = "Create a scan session to generate a command.";
+    elements.commandOutput.textContent = "Prepare a command to begin.";
     elements.commandFallback.hidden = true;
     elements.commandFallback.open = false;
     elements.commandFallbackOutput.textContent = "";
@@ -266,6 +266,7 @@ function renderCommandTabs(commands) {
   if (!modes.length) {
     elements.commandTabs.innerHTML = "";
     elements.commandOutput.textContent = "No command available yet.";
+    elements.commandNote.textContent = "Choose the command that matches the server environment.";
     return;
   }
 

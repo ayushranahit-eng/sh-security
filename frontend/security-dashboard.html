@@ -36,8 +36,8 @@
       <section class="panel launch-panel">
         <div class="panel-header">
           <div>
-            <h2>Launch Scan</h2>
-            <p>Create a scan session, copy the command, then let the client run it in their repository folder.</p>
+            <h2>Start Scan</h2>
+            <p>Enter the website address to prepare a secure scan command for the project server.</p>
           </div>
         </div>
         <div class="launch-grid launch-grid-compact">
@@ -46,8 +46,8 @@
             <input id="websiteUrlInput" type="url" placeholder="https://example.com">
           </label>
           <div class="actions-row">
-            <button class="button primary" id="createScanButton" type="button">Create scan session</button>
-            <button class="button ghost" id="refreshScanButton" type="button">Refresh session</button>
+            <button class="button primary" id="createScanButton" type="button">Prepare command</button>
+            <button class="button ghost" id="refreshScanButton" type="button">Refresh status</button>
           </div>
         </div>
         <div class="session-strip" id="sessionStrip">
@@ -69,18 +69,18 @@
       <section class="panel command-panel">
         <div class="panel-header compact">
           <div>
-            <h2>Client Command</h2>
-            <p>Client goes to their repo folder, then runs the matching command.</p>
+            <h2>Run This Command</h2>
+            <p>Open the project folder on the server, then run the command below.</p>
           </div>
           <div class="tab-row" id="commandTabs"></div>
         </div>
         <div class="command-box">
-          <pre id="commandOutput">Create a scan session to generate a command.</pre>
+          <pre id="commandOutput">Prepare a command to begin.</pre>
           <button class="button ghost" id="copyCommandButton" type="button">Copy command</button>
         </div>
-        <p class="subtle" id="commandNote">Windows commands assume curl and bash are available.</p>
+        <p class="subtle" id="commandNote">Choose the command that matches the server environment.</p>
         <details class="command-fallback" id="commandFallback" hidden>
-          <summary>Show fallback command</summary>
+          <summary>Alternative download method</summary>
           <pre id="commandFallbackOutput"></pre>
         </details>
       </section>
