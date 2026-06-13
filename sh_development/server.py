@@ -257,7 +257,11 @@ if ! have semgrep && [ "$SKIP_SEMGREP_INSTALL" != "1" ]; then
   log "Semgrep not found. Trying user install with pip."
   install_log="$RUNNER_DIR/semgrep-install.log"
   if "$PYTHON_BIN" -m pip --version >/dev/null 2>&1 || "$PYTHON_BIN" -m ensurepip --upgrade >/dev/null 2>&1; then
-    PIP_DISABLE_PIP_VERSION_CHECK=1 "$PYTHON_BIN" -m pip install --user semgrep >"$install_log" 2>&1 || log "Semgrep install failed; see $install_log. Scan will continue with built-in checks."
+    if ! PIP_DISABLE_PIP_VERSION_CHECK=1 "$PYTHON_BIN" -m pip install --user semgrep >"$install_log" 2>&1; then
+      log "Semgrep install failed; showing the last lines from $install_log"
+      tail -n 20 "$install_log" >&2 || true
+      log "Scan will continue with built-in checks."
+    fi
   else
     log "pip is not available for $PYTHON_BIN; scan will continue with built-in checks."
   fi

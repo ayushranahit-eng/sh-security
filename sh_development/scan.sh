@@ -249,16 +249,12 @@ EOF
     arm64) pkg_arch="arm64" ;;
     *) return 1 ;;
   esac
-  archive="$CACHE_DIR/osv-scanner.zip"
-  url="https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_${os}_${pkg_arch}.zip"
+  archive="$CACHE_DIR/osv-scanner"
+  url="https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_${os}_${pkg_arch}"
   log "Downloading osv-scanner $version"
   notify_scan "osv" "running" "Downloading osv-scanner binary" "osv-scanner"
   download_file "$url" "$archive" || return 1
-  if have unzip; then
-    unzip -o "$archive" -d "$CACHE_DIR/bin" >/dev/null || return 1
-  else
-    "$PYTHON_BIN" -m zipfile -e "$archive" "$CACHE_DIR/bin" || return 1
-  fi
+  mv "$archive" "$tool" || return 1
   chmod +x "$tool"
   printf '%s\n' "$tool"
 }
