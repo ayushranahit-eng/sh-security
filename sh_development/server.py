@@ -104,21 +104,30 @@ def save_scan(session: dict[str, Any]) -> None:
 
 def build_scan_commands(base_url: str, scan_id: str, website_url: str = "") -> dict[str, str]:
     clean_url = website_url.replace('"', "")
-    target_env = f' SCAN_TARGET_URL="{clean_url}"' if clean_url else ""
     scan_token = API_TOKEN if API_TOKEN and API_TOKEN != "change-me" else "TOKEN"
-    linux_env = f'SCAN_API_TOKEN="{scan_token}" SCAN_ID="{scan_id}"{target_env}'
-    linux_runner = (
-        'u="' + base_url + '/run.sh"; '
-        "t=\"${TMPDIR:-/tmp}/scan-sh-runner.$$\"; "
-        "if command -v curl >/dev/null 2>&1; then curl -fsSL \"$u\" -o \"$t\"; "
-        "elif command -v wget >/dev/null 2>&1; then wget -qO \"$t\" \"$u\"; "
-        "else p=\"$(command -v python3 || command -v python)\" && \"$p\" -c \"import sys, urllib.request; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])\" \"$u\" \"$t\"; "
-        "fi && bash \"$t\"; s=$?; rm -f \"$t\"; exit \"$s\""
-    )
-    linux = (
-        f"{linux_env} "
-        f"bash -c '{linux_runner}'"
-    )
+    linux_lines = [
+        f'export SCAN_API_TOKEN="{scan_token}"',
+        f'export SCAN_ID="{scan_id}"',
+    ]
+    if clean_url:
+        linux_lines.append(f'export SCAN_TARGET_URL="{clean_url}"')
+    linux_lines.extend([
+        f'url="{base_url}/run.sh"',
+        'tmp="${TMPDIR:-/tmp}/scan-sh-runner.$$"',
+        'if command -v curl >/dev/null 2>&1; then',
+        '  curl -fsSL "$url" -o "$tmp"',
+        'elif command -v wget >/dev/null 2>&1; then',
+        '  wget -qO "$tmp" "$url"',
+        'else',
+        '  p="$(command -v python3 || command -v python)"',
+        '  "$p" -c "import sys, urllib.request; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])" "$url" "$tmp"',
+        'fi',
+        'bash "$tmp"',
+        'status=$?',
+        'rm -f "$tmp"',
+        'exit "$status"',
+    ])
+    linux = "\n".join(linux_lines)
     powershell = (
         f'$env:SCAN_API_TOKEN="{scan_token}"; $env:SCAN_ID="{scan_id}";'
         + (f' $env:SCAN_TARGET_URL="{clean_url}";' if clean_url else "")
