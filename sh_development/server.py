@@ -255,7 +255,12 @@ chmod +x "$RUNNER_DIR/scan.sh" "$RUNNER_DIR/find_exposed_files.sh"
 
 if ! have semgrep && [ "$SKIP_SEMGREP_INSTALL" != "1" ]; then
   log "Semgrep not found. Trying user install with pip."
-  "$PYTHON_BIN" -m pip install --user semgrep >/dev/null 2>&1 || log "Semgrep install failed; scan will continue with built-in checks."
+  install_log="$RUNNER_DIR/semgrep-install.log"
+  if "$PYTHON_BIN" -m pip --version >/dev/null 2>&1 || "$PYTHON_BIN" -m ensurepip --upgrade >/dev/null 2>&1; then
+    PIP_DISABLE_PIP_VERSION_CHECK=1 "$PYTHON_BIN" -m pip install --user semgrep >"$install_log" 2>&1 || log "Semgrep install failed; see $install_log. Scan will continue with built-in checks."
+  else
+    log "pip is not available for $PYTHON_BIN; scan will continue with built-in checks."
+  fi
   export PATH="$HOME/.local/bin:$PATH"
 fi
 

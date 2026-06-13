@@ -7,6 +7,7 @@ CACHE_DIR="${SCAN_CACHE_DIR:-$HOME/.cache/scan-sh}"
 OUT_DIR="${SCAN_OUT_DIR:-.scan-sh}"
 REPORT_STAMP="$(date +"%Y%m%d-%H%M%S")"
 REPORT_FILE="${SCAN_REPORT_FILE:-security-report-${REPORT_STAMP}.json}"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 OFFLINE=0
 SKIP_DOWNLOADS=0
 SCAN_CLEAN="${SCAN_CLEAN:-0}"
@@ -242,14 +243,14 @@ install_osv_scanner() {
   read -r os arch <<EOF
 $detected
 EOF
-  version="${OSV_SCANNER_VERSION:-2.0.1}"
+  version="${OSV_SCANNER_VERSION:-2.3.8}"
   case "$arch" in
     x64) pkg_arch="amd64" ;;
     arm64) pkg_arch="arm64" ;;
     *) return 1 ;;
   esac
   archive="$CACHE_DIR/osv-scanner.zip"
-  url="https://github.com/google/osv-scanner/releases/download/v${version}/osv-scanner_${os}_${pkg_arch}.zip"
+  url="https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_${os}_${pkg_arch}.zip"
   log "Downloading osv-scanner $version"
   notify_scan "osv" "running" "Downloading osv-scanner binary" "osv-scanner"
   download_file "$url" "$archive" || return 1
@@ -356,8 +357,6 @@ else
   notify_scan "osv" "skipped" "osv-scanner unavailable on this system" "osv-scanner"
   printf '{}\n' >"$OUT_DIR/osv.json"
 fi
-
-SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 if [ -x "$SCRIPT_DIR/find_exposed_files.sh" ]; then
   notify_scan "custom" "running" "Running custom file exposure checks" "custom"
   run_or_note custom "$SCRIPT_DIR/find_exposed_files.sh" .
