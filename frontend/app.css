@@ -218,6 +218,10 @@ select {
   display: none;
 }
 
+.command-fallback-actions {
+  padding: 0 16px 12px;
+}
+
 .command-fallback pre {
   margin: 0;
   padding: 0 16px 16px;

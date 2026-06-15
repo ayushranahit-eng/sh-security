@@ -15,6 +15,8 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 
 BASE_DIR = Path(__file__).resolve().parent
 DIST_DIR = BASE_DIR / "dist"
+SCANNER_VERSIONS_DIR = BASE_DIR / "scanner_versions"
+DEFAULT_SCANNER_VERSION = os.environ.get("SCAN_DEFAULT_VERSION", "v1")
 DATA_DIR = Path(os.environ.get("SCAN_SERVER_DATA_DIR", BASE_DIR / "data"))
 SCANS_DIR = DATA_DIR / "scans"
 REPORTS_FILE = DATA_DIR / "reports.jsonl"
@@ -49,6 +51,19 @@ def public_base_url(request: Request) -> str:
     proto = request.headers.get("x-forwarded-proto", request.url.scheme).split(",")[0].strip()
     host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc)).split(",")[0].strip()
     return f"{proto}://{host}"
+
+
+def scanner_bundle_dir(version: str) -> Path:
+    if version not in {"v1", "v2"}:
+        raise HTTPException(status_code=404, detail="Scanner version not found")
+    bundle = SCANNER_VERSIONS_DIR / version
+    if not bundle.exists():
+        raise HTTPException(status_code=404, detail="Scanner version not found")
+    return bundle
+
+
+def version_asset_base_url(request: Request, version: str) -> str:
+    return f"{public_base_url(request)}/{version}"
 
 
 def scan_file_path(scan_id: str) -> Path:
@@ -143,7 +158,9 @@ def build_scan_commands(base_url: str, scan_id: str, website_url: str = "") -> d
         "git_bash": linux,
         "powershell": powershell,
         "cmd": cmd,
-        "notes": "Production Linux/hosting servers should use the Linux command. It uses curl, wget, or Python 3 to download the runner. Windows commands require bash, such as Git Bash, plus curl.exe.",
+        "linux_v1": linux.replace(f'{base_url}/run.sh', f'{base_url}/v1/run.sh'),
+        "linux_v2": linux.replace(f'{base_url}/run.sh', f'{base_url}/v2/run.sh'),
+        "notes": "Production Linux/hosting servers should use the Linux command. /run.sh is the stable scanner; /v1/run.sh and /v2/run.sh can be used for explicit version testing or rollback.",
     }
 
 
@@ -194,12 +211,39 @@ def exposed_files_script() -> FileResponse:
     return FileResponse(BASE_DIR / "find_exposed_files.sh", media_type="text/x-shellscript")
 
 
-def build_runner_script(base_url: str) -> str:
+@app.get("/{version}/dist/semgrep-rules.yml")
+def versioned_semgrep_rules(version: str) -> FileResponse:
+    return FileResponse(scanner_bundle_dir(version) / "dist" / "semgrep-rules.yml", media_type="text/yaml")
+
+
+@app.get("/{version}/dist/iac-rules.yml")
+def versioned_iac_rules(version: str) -> FileResponse:
+    return FileResponse(scanner_bundle_dir(version) / "dist" / "iac-rules.yml", media_type="text/yaml")
+
+
+@app.get("/{version}/scan.sh")
+def versioned_scan_script(version: str) -> FileResponse:
+    return FileResponse(scanner_bundle_dir(version) / "scan.sh", media_type="text/x-shellscript")
+
+
+@app.get("/{version}/merge_report.py")
+def versioned_merge_report_script(version: str) -> FileResponse:
+    return FileResponse(scanner_bundle_dir(version) / "merge_report.py", media_type="text/x-python")
+
+
+@app.get("/{version}/find_exposed_files.sh")
+def versioned_exposed_files_script(version: str) -> FileResponse:
+    return FileResponse(scanner_bundle_dir(version) / "find_exposed_files.sh", media_type="text/x-shellscript")
+
+
+def build_runner_script(base_url: str, asset_base_url: str) -> str:
     base_url = base_url.rstrip("/")
+    asset_base_url = asset_base_url.rstrip("/")
     return f'''#!/usr/bin/env bash
 set -u
 
 BASE_URL="${{BASE_URL:-{base_url}}}"
+ASSET_BASE_URL="${{SCAN_ASSET_BASE:-{asset_base_url}}}"
 RUNNER_DIR="${{SCAN_RUNNER_DIR:-${{TMPDIR:-/tmp}}/scan-sh-runner.$$}}"
 SCAN_ARGS="${{SCAN_ARGS:---fail-on never --clean}}"
 SKIP_SEMGREP_INSTALL="${{SKIP_SEMGREP_INSTALL:-0}}"
@@ -248,9 +292,9 @@ fi
 
 rm -rf -- "$RUNNER_DIR"
 mkdir -p "$RUNNER_DIR"
-download "$BASE_URL/scan.sh" "$RUNNER_DIR/scan.sh"
-download "$BASE_URL/merge_report.py" "$RUNNER_DIR/merge_report.py"
-download "$BASE_URL/find_exposed_files.sh" "$RUNNER_DIR/find_exposed_files.sh"
+download "$ASSET_BASE_URL/scan.sh" "$RUNNER_DIR/scan.sh"
+download "$ASSET_BASE_URL/merge_report.py" "$RUNNER_DIR/merge_report.py"
+download "$ASSET_BASE_URL/find_exposed_files.sh" "$RUNNER_DIR/find_exposed_files.sh"
 chmod +x "$RUNNER_DIR/scan.sh" "$RUNNER_DIR/find_exposed_files.sh"
 
 if ! have semgrep && [ "$SKIP_SEMGREP_INSTALL" != "1" ]; then
@@ -269,7 +313,7 @@ if ! have semgrep && [ "$SKIP_SEMGREP_INSTALL" != "1" ]; then
 fi
 
 log "Running scan in $(pwd)"
-BASE_URL="$BASE_URL" "$RUNNER_DIR/scan.sh" $SCAN_ARGS
+BASE_URL="$BASE_URL" SCAN_ASSET_BASE="$ASSET_BASE_URL" "$RUNNER_DIR/scan.sh" $SCAN_ARGS
 SCAN_EXIT=$?
 
 rm -rf -- "$RUNNER_DIR"
@@ -279,12 +323,36 @@ exit "$SCAN_EXIT"
 
 @app.get("/run.sh")
 def run_script(request: Request) -> PlainTextResponse:
-    return PlainTextResponse(build_runner_script(public_base_url(request)), media_type="text/x-shellscript")
+    return PlainTextResponse(
+        build_runner_script(public_base_url(request), version_asset_base_url(request, DEFAULT_SCANNER_VERSION)),
+        media_type="text/x-shellscript",
+    )
 
 
 @app.get("/install.sh")
 def install_script(request: Request) -> PlainTextResponse:
-    return PlainTextResponse(build_runner_script(public_base_url(request)), media_type="text/x-shellscript")
+    return PlainTextResponse(
+        build_runner_script(public_base_url(request), version_asset_base_url(request, DEFAULT_SCANNER_VERSION)),
+        media_type="text/x-shellscript",
+    )
+
+
+@app.get("/{version}/run.sh")
+def versioned_run_script(version: str, request: Request) -> PlainTextResponse:
+    scanner_bundle_dir(version)
+    return PlainTextResponse(
+        build_runner_script(public_base_url(request), version_asset_base_url(request, version)),
+        media_type="text/x-shellscript",
+    )
+
+
+@app.get("/{version}/install.sh")
+def versioned_install_script(version: str, request: Request) -> PlainTextResponse:
+    scanner_bundle_dir(version)
+    return PlainTextResponse(
+        build_runner_script(public_base_url(request), version_asset_base_url(request, version)),
+        media_type="text/x-shellscript",
+    )
 
 
 @app.post("/api/scans")
