@@ -279,10 +279,11 @@ function renderCommandTabs(commands) {
     `<button type="button" class="${key === state.commandMode ? "active" : ""}" data-command-mode="${key}">${label}</button>`
   )).join("");
   const presentation = formatCommandPresentation(state.commandMode, commands);
+  const keepFallbackOpen = elements.commandFallback.open && !elements.commandFallback.hidden;
   elements.commandOutput.textContent = presentation.primary;
   elements.commandNote.textContent = presentation.note;
   elements.commandFallback.hidden = !presentation.fallback;
-  elements.commandFallback.open = false;
+  elements.commandFallback.open = Boolean(presentation.fallback && keepFallbackOpen);
   elements.commandFallbackOutput.textContent = presentation.fallback;
 }
 
