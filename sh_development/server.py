@@ -54,7 +54,7 @@ def public_base_url(request: Request) -> str:
 
 
 def scanner_bundle_dir(version: str) -> Path:
-    if version not in {"v1", "v2"}:
+    if version not in {"v1", "v2", "v3"}:
         raise HTTPException(status_code=404, detail="Scanner version not found")
     bundle = SCANNER_VERSIONS_DIR / version
     if not bundle.exists():
@@ -160,7 +160,8 @@ def build_scan_commands(base_url: str, scan_id: str, website_url: str = "") -> d
         "cmd": cmd,
         "linux_v1": linux.replace(f'{base_url}/run.sh', f'{base_url}/v1/run.sh'),
         "linux_v2": linux.replace(f'{base_url}/run.sh', f'{base_url}/v2/run.sh'),
-        "notes": "Production Linux/hosting servers should use the Linux command. /run.sh is the stable scanner; /v1/run.sh and /v2/run.sh can be used for explicit version testing or rollback.",
+        "linux_v3": linux.replace(f'{base_url}/run.sh', f'{base_url}/v3/run.sh'),
+        "notes": "Production Linux/hosting servers should use the Linux command. /run.sh is the stable scanner; /v1/run.sh, /v2/run.sh, and /v3/run.sh can be used for explicit version testing or rollback.",
     }
 
 

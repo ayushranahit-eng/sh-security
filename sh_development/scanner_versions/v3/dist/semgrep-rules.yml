@@ -1,0 +1,627 @@
+rules:
+  - id: python-sql-injection-string-format
+    message: SQL query appears to use string formatting or concatenation. Use parameterized queries.
+    severity: ERROR
+    metadata:
+      category: sast
+      severity: high
+      remediation: Use parameterized/prepared statements and keep user input separate from SQL strings.
+    languages: [python]
+    patterns:
+      - pattern-either:
+          - pattern: $CUR.execute("..." % $INPUT)
+          - pattern: $CUR.execute("...".format(...))
+          - pattern: $CUR.execute(f"...")
+
+  - id: python-command-injection-shell-true
+    message: subprocess with shell=True can allow command injection when arguments contain user input.
+    severity: ERROR
+    metadata:
+      category: sast
+      severity: high
+      remediation: Pass an argument list with shell=False and validate inputs.
+    languages: [python]
+    pattern: subprocess.$FUNC($CMD, shell=True, ...)
+
+  - id: python-eval-exec
+    message: Dynamic eval/exec can execute attacker-controlled code.
+    severity: ERROR
+    metadata:
+      category: sast
+      severity: high
+      remediation: Replace eval/exec with explicit parsing or a safe interpreter.
+    languages: [python]
+    pattern-either:
+      - pattern: eval($EXPR)
+      - pattern: exec($EXPR)
+
+  - id: python-insecure-deserialization-pickle
+    message: pickle.loads can execute code when input is untrusted.
+    severity: ERROR
+    metadata:
+      category: sast
+      severity: high
+      remediation: Use a safe data format such as JSON for untrusted data.
+    languages: [python]
+    pattern-either:
+      - pattern: pickle.loads($DATA)
+      - pattern: pickle.load($DATA)
+
+  - id: python-path-traversal-open
+    message: File path is built from a request-like value and opened directly.
+    severity: WARNING
+    metadata:
+      category: sast
+      severity: medium
+      remediation: Normalize paths, enforce an allowlisted base directory, and reject traversal.
+    languages: [python]
+    patterns:
+      - pattern: open($PATH, ...)
+      - metavariable-regex:
+          metavariable: $PATH
+          regex: ".*(request|args|form|param|input).*"
+
+  - id: python-weak-md5-password
+    message: MD5/SHA1 should not be used for password hashing or security-sensitive integrity.
+    severity: WARNING
+    metadata:
+      category: sast
+      severity: medium
+      remediation: Use Argon2, bcrypt, scrypt, or a vetted password hashing library.
+    languages: [python]
+    pattern-either:
+      - pattern: hashlib.md5(...)
+      - pattern: hashlib.sha1(...)
+
+  - id: python-hardcoded-crypto-key
+    message: Hardcoded encryption key or secret-looking variable.
+    severity: ERROR
+    metadata:
+      category: sast
+      severity: high
+      remediation: Load keys from a secrets manager or protected runtime environment.
+    languages: [python]
+    pattern-regex: "(?i)(encryption_key|secret_key|jwt_secret)\\s*=\\s*['\"][^'\"]{12,}['\"]"
+
+  - id: flask-cookie-missing-security-flags
+    message: Flask set_cookie call appears to miss secure cookie flags.
+    severity: WARNING
+    metadata:
+      category: sast
+      severity: medium
+      remediation: Set httponly=True, secure=True, and samesite='Lax' or 'Strict'.
+    languages: [python]
+    patterns:
+      - pattern: $RESP.set_cookie(...)
+      - pattern-not: $RESP.set_cookie(..., httponly=True, ...)
+      - pattern-not: $RESP.set_cookie(..., secure=True, ...)
+
+  - id: javascript-nosql-operator-injection
+    message: Mongo query uses request body directly, which may allow operator injection.
+    severity: ERROR
+    metadata:
+      category: sast
+      severity: high
+      remediation: Validate/allowlist query fields and strip Mongo operators from user input.
+    languages: [javascript, typescript]
+    pattern-either:
+      - pattern: $COL.find(req.body)
+      - pattern: $COL.findOne(req.body)
+      - pattern: $COL.updateOne(req.body, ...)
+
+  - id: javascript-ssti-unsafe-render
+    message: Template rendering with request-controlled input can lead to server-side template injection.
+    severity: ERROR
+    metadata:
+      category: sast
+      severity: high
+      remediation: Render trusted templates only and pass user input as escaped data.
+    languages: [javascript, typescript]
+    pattern-either:
+      - pattern: res.render(req.$FIELD)
+      - pattern: template.render(req.$FIELD)
+
+  - id: javascript-eval
+    message: eval or Function constructor can execute attacker-controlled JavaScript.
+    severity: ERROR
+    metadata:
+      category: sast
+      severity: high
+      remediation: Replace dynamic execution with explicit parsing and allowlisted operations.
+    languages: [javascript, typescript]
+    pattern-either:
+      - pattern: eval($EXPR)
+      - pattern: new Function($EXPR)
+
+  - id: javascript-command-injection
+    message: child_process command execution with request-controlled input can allow command injection.
+    severity: ERROR
+    metadata:
+      category: sast
+      severity: high
+      remediation: Use execFile/spawn with argument arrays and validate inputs.
+    languages: [javascript, typescript]
+    pattern-either:
+      - pattern: child_process.exec(req.$FIELD)
+      - pattern: exec(req.$FIELD)
+
+  - id: javascript-insecure-cookie-flags
+    message: Cookie appears to be set without secure/httpOnly/sameSite flags.
+    severity: WARNING
+    metadata:
+      category: sast
+      severity: medium
+      remediation: Set httpOnly, secure, and sameSite on sensitive cookies.
+    languages: [javascript, typescript]
+    pattern: res.cookie($NAME, $VALUE)
+
+  - id: javascript-missing-helmet
+    message: Express app does not appear to configure helmet security headers in this file.
+    severity: INFO
+    metadata:
+      category: sast
+      severity: low
+      remediation: Configure helmet or equivalent CSP/HSTS/security headers.
+    languages: [javascript, typescript]
+    patterns:
+      - pattern: express()
+      - pattern-not: helmet(...)
+
+  - id: smtp-header-injection
+    message: Email header field uses request-controlled input.
+    severity: WARNING
+    metadata:
+      category: sast
+      severity: medium
+      remediation: Reject CR/LF in mail headers and validate sender/subject fields.
+    languages: [python, javascript, typescript]
+    pattern-regex: "(?i)(subject|from|to|reply_to|replyTo)\\s*[:=]\\s*.*(request|req\\.|input|params|form)"
+
+  - id: python-flask-debug-enabled
+    message: Flask debug mode appears enabled.
+    severity: WARNING
+    metadata:
+      category: config
+      severity: medium
+      remediation: Never run production Flask apps with debug=True.
+    languages: [python]
+    pattern: $APP.run(..., debug=True, ...)
+
+  - id: python-django-debug-true
+    message: Django DEBUG appears enabled.
+    severity: WARNING
+    metadata:
+      category: config
+      severity: medium
+      remediation: Set DEBUG=False in production and use environment-specific settings.
+    languages: [python]
+    pattern: DEBUG = True
+
+  - id: python-logging-secret
+    message: Code appears to log secret or token data.
+    severity: WARNING
+    metadata:
+      category: sast
+      severity: medium
+      remediation: Do not log passwords, tokens, authorization headers, or secret values.
+    languages: [python]
+    pattern-regex: "(?i)(logging\\.|logger\\.|print\\().*(password|passwd|secret|token|authorization|api_key)"
+
+  - id: javascript-logging-secret
+    message: Code appears to log secret or token data.
+    severity: WARNING
+    metadata:
+      category: sast
+      severity: medium
+      remediation: Remove secret values from console/application logs.
+    languages: [javascript, typescript]
+    pattern-regex: "(?i)(console\\.log|logger\\.).*(password|passwd|secret|token|authorization|apiKey|api_key)"
+
+  - id: javascript-express-session-hardcoded-secret
+    message: Express session secret appears hardcoded.
+    severity: ERROR
+    metadata:
+      category: auth
+      severity: high
+      remediation: Load session secrets from a protected environment variable or secret manager.
+    languages: [javascript, typescript]
+    pattern-regex: "session\\s*\\(\\s*\\{[^}]*secret\\s*:\\s*['\"][^'\"]{8,}['\"]"
+
+  - id: javascript-jwt-verify-ignore-expiration
+    message: JWT verification appears to ignore token expiration.
+    severity: ERROR
+    metadata:
+      category: auth
+      severity: high
+      remediation: Do not set ignoreExpiration=true for production token verification.
+    languages: [javascript, typescript]
+    pattern-regex: "jwt\\.verify\\s*\\([^\\)]*ignoreExpiration\\s*:\\s*true"
+
+  - id: default-admin-credentials
+    message: Default or weak admin credentials appear in source code.
+    severity: ERROR
+    metadata:
+      category: auth
+      severity: high
+      remediation: Remove default credentials and require strong per-environment secrets.
+    languages: [python, javascript, typescript]
+    pattern-regex: "(?i)(admin|root|username|user).{0,30}(password|pass|pwd).{0,30}(admin|password|123456|changeme|default)"
+
+  - id: plaintext-password-compare
+    message: Code appears to compare a plaintext password directly.
+    severity: ERROR
+    metadata:
+      category: auth
+      severity: high
+      remediation: Store salted password hashes and verify with a password hashing library.
+    languages: [python, javascript, typescript]
+    pattern-regex: "(?i)(password|passwd|pwd)\\s*(==|===)\\s*['\"][^'\"]+['\"]"
+
+  - id: python-requests-tls-verify-false
+    message: TLS certificate verification is disabled.
+    severity: WARNING
+    metadata:
+      category: config
+      severity: medium
+      remediation: Keep TLS verification enabled for outbound requests.
+    languages: [python]
+    pattern-regex: "requests\\.(get|post|put|delete|patch)\\([^\\)]*verify\\s*=\\s*False"
+
+  - id: python-ssrf-user-controlled-url
+    message: Server-side request appears to use user-controlled URL input.
+    severity: ERROR
+    metadata:
+      category: sast
+      severity: high
+      remediation: Allowlist outbound hosts and never request arbitrary user-provided URLs.
+    languages: [python]
+    pattern-regex: "requests\\.(get|post|put|delete|patch)\\s*\\(\\s*(request\\.|.*args\\.get|.*form\\.get)"
+
+  - id: javascript-ssrf-user-controlled-url
+    message: Server-side request appears to use user-controlled URL input.
+    severity: ERROR
+    metadata:
+      category: sast
+      severity: high
+      remediation: Allowlist outbound hosts and block internal/private network destinations.
+    languages: [javascript, typescript]
+    pattern-regex: "(axios\\.(get|post)|fetch)\\s*\\(\\s*(req\\.|request\\.)"
+
+  - id: python-open-redirect
+    message: Redirect target appears to come from user input.
+    severity: WARNING
+    metadata:
+      category: sast
+      severity: medium
+      remediation: Redirect only to allowlisted local paths or trusted domains.
+    languages: [python]
+    pattern-regex: "redirect\\s*\\(\\s*(request\\.|.*args\\.get|.*form\\.get)"
+
+  - id: javascript-open-redirect
+    message: Redirect target appears to come from user input.
+    severity: WARNING
+    metadata:
+      category: sast
+      severity: medium
+      remediation: Redirect only to allowlisted local paths or trusted domains.
+    languages: [javascript, typescript]
+    pattern-regex: "res\\.redirect\\s*\\(\\s*(req\\.|request\\.)"
+
+  - id: python-unsafe-yaml-load
+    message: yaml.load is unsafe for untrusted input.
+    severity: ERROR
+    metadata:
+      category: sast
+      severity: high
+      remediation: Use yaml.safe_load for untrusted YAML.
+    languages: [python]
+    pattern: yaml.load(...)
+
+  - id: python-xml-xxe-risk
+    message: XML parser usage may be vulnerable to XXE or entity expansion.
+    severity: WARNING
+    metadata:
+      category: sast
+      severity: medium
+      remediation: Use defusedxml or disable external entity expansion.
+    languages: [python]
+    pattern-either:
+      - pattern: etree.parse(...)
+      - pattern: minidom.parseString(...)
+      - pattern: xml.sax.parseString(...)
+
+  - id: python-file-upload-unsanitized-save
+    message: Uploaded file name appears to be saved directly.
+    severity: ERROR
+    metadata:
+      category: sast
+      severity: high
+      remediation: Generate server-side filenames, validate extensions, and store uploads outside executable paths.
+    languages: [python]
+    pattern-regex: "\\.save\\s*\\([^\\)]*\\.filename"
+
+  - id: javascript-file-upload-originalname
+    message: Uploaded original filename appears to be used directly.
+    severity: ERROR
+    metadata:
+      category: sast
+      severity: high
+      remediation: Generate safe server-side filenames and validate file types.
+    languages: [javascript, typescript]
+    pattern-regex: "(originalname|req\\.file\\.name|req\\.file\\.originalname)"
+
+  - id: python-jwt-decode-no-verify
+    message: JWT decoding appears to disable signature verification.
+    severity: ERROR
+    metadata:
+      category: auth
+      severity: high
+      remediation: Verify JWT signatures, issuer, audience, and expiration.
+    languages: [python]
+    pattern-regex: "jwt\\.decode\\s*\\([^\\)]*(verify_signature|verify)\\s*[:=]\\s*False"
+
+  - id: javascript-jwt-decode-without-verify
+    message: JWT is decoded without verification.
+    severity: WARNING
+    metadata:
+      category: auth
+      severity: medium
+      remediation: Use jwt.verify for security decisions, not jwt.decode.
+    languages: [javascript, typescript]
+    pattern: jwt.decode(...)
+
+  - id: python-insecure-random-token
+    message: Random module appears to generate security-sensitive token data.
+    severity: WARNING
+    metadata:
+      category: sast
+      severity: medium
+      remediation: Use secrets.token_urlsafe or a cryptographic random generator.
+    languages: [python]
+    pattern-regex: "(?i)(token|password|secret).*=.*random\\."
+
+  - id: javascript-insecure-random-token
+    message: Math.random appears to generate security-sensitive token data.
+    severity: WARNING
+    metadata:
+      category: sast
+      severity: medium
+      remediation: Use crypto.randomUUID or crypto.getRandomValues for security-sensitive tokens.
+    languages: [javascript, typescript]
+    pattern-regex: "(?i)(token|password|secret).*=.*Math\\.random"
+
+  - id: python-django-csrf-exempt
+    message: Django CSRF protection is disabled for a view.
+    severity: WARNING
+    metadata:
+      category: auth
+      severity: medium
+      remediation: Avoid csrf_exempt on state-changing views unless another protection is in place.
+    languages: [python]
+    pattern: "@csrf_exempt"
+
+  - id: javascript-express-cors-wildcard
+    message: Express CORS appears to allow all origins.
+    severity: WARNING
+    metadata:
+      category: config
+      severity: medium
+      remediation: Restrict CORS origins to trusted domains.
+    languages: [javascript, typescript]
+    pattern-regex: "cors\\s*\\(\\s*\\{[^}]*origin\\s*:\\s*['\"]\\*['\"]"
+
+  - id: python-django-allowed-hosts-wildcard
+    message: Django ALLOWED_HOSTS allows every host.
+    severity: WARNING
+    metadata:
+      category: config
+      severity: medium
+      remediation: Set ALLOWED_HOSTS to explicit production domains.
+    languages: [python]
+    pattern-regex: "ALLOWED_HOSTS\\s*=\\s*\\[[^\\]]*['\"]\\*['\"]"
+
+  - id: python-django-secret-key-hardcoded
+    message: Django SECRET_KEY appears hardcoded.
+    severity: ERROR
+    metadata:
+      category: auth
+      severity: high
+      remediation: Load Django SECRET_KEY from a protected environment secret.
+    languages: [python]
+    pattern-regex: "SECRET_KEY\\s*=\\s*['\"][^'\"]{16,}['\"]"
+
+  - id: react-dangerously-set-inner-html
+    message: React dangerouslySetInnerHTML can lead to XSS when data is not sanitized.
+    severity: WARNING
+    metadata:
+      category: sast
+      severity: medium
+      remediation: Avoid dangerouslySetInnerHTML or sanitize trusted HTML with a vetted sanitizer.
+    languages: [javascript, typescript]
+    pattern-regex: "dangerouslySetInnerHTML"
+
+  - id: javascript-window-location-user-controlled
+    message: Client-side redirect uses a variable destination.
+    severity: WARNING
+    metadata:
+      category: sast
+      severity: medium
+      remediation: Redirect only to allowlisted local routes or trusted domains.
+    languages: [javascript, typescript]
+    pattern-regex: "window\\.location\\s*=\\s*"
+
+  - id: php-laravel-debug-route-csrf-disabled
+    message: Laravel route disables CSRF protection.
+    severity: WARNING
+    metadata:
+      category: web
+      severity: medium
+      remediation: Keep CSRF protection enabled for browser state-changing routes or protect the endpoint another way.
+    languages: [php]
+    pattern-regex: "withoutMiddleware\\s*\\([^\\)]*(VerifyCsrfToken|csrf)"
+
+  - id: php-laravel-env-debug-true
+    message: Laravel environment file enables debug mode.
+    severity: ERROR
+    metadata:
+      category: config
+      severity: high
+      remediation: Set APP_DEBUG=false in production and clear cached config.
+    languages: [generic]
+    paths:
+      include:
+        - ".env"
+        - ".env.*"
+    pattern-regex: "(?i)^APP_DEBUG\\s*=\\s*(true|1|yes)"
+
+  - id: php-laravel-mass-assignment-unguarded
+    message: Laravel model uses unguarded mass assignment.
+    severity: WARNING
+    metadata:
+      category: web
+      severity: medium
+      remediation: Prefer explicit $fillable fields and validate request payloads before model assignment.
+    languages: [php]
+    pattern-regex: "protected\\s+\\$guarded\\s*=\\s*\\[\\s*\\]"
+
+  - id: php-laravel-request-all-mass-assignment
+    message: Request all/input is passed into create/update, which may allow mass assignment.
+    severity: WARNING
+    metadata:
+      category: web
+      severity: medium
+      remediation: Validate and allowlist fields before create/update.
+    languages: [php]
+    pattern-regex: "(create|update|fill)\\s*\\(\\s*\\$request->(all|input)\\s*\\("
+
+  - id: php-open-redirect-request-controlled
+    message: Redirect target appears influenced by request input.
+    severity: WARNING
+    metadata:
+      category: web
+      severity: medium
+      remediation: Allowlist redirect destinations or use route names/relative paths.
+    languages: [php]
+    pattern-regex: "(redirect\\s*\\(|redirect\\(\\)->to\\s*\\(|header\\s*\\(\\s*['\"]Location:).*\\$request"
+
+  - id: php-unsafe-file-upload-original-name
+    message: Uploaded file uses the client-supplied original filename.
+    severity: WARNING
+    metadata:
+      category: web
+      severity: medium
+      remediation: Generate a server-side filename and validate MIME/extension before storing uploads.
+    languages: [php]
+    pattern-regex: "(getClientOriginalName|move_uploaded_file|storeAs\\s*\\([^\\)]*getClientOriginalName)"
+
+  - id: php-ssrf-user-controlled-url
+    message: Server-side request appears to use request-controlled URL input.
+    severity: ERROR
+    metadata:
+      category: web
+      severity: high
+      remediation: Allowlist outbound hosts and block private, loopback, and cloud metadata IP ranges.
+    languages: [php]
+    pattern-regex: "(Http::(get|post)|file_get_contents|curl_setopt|curl_exec).*\\$request"
+
+  - id: php-xxe-unsafe-xml-parser
+    message: XML parser appears configured to expand external entities.
+    severity: ERROR
+    metadata:
+      category: web
+      severity: high
+      remediation: Disable external entities and DTD processing for untrusted XML.
+    languages: [php]
+    pattern-regex: "(LIBXML_NOENT|substituteEntities\\s*=\\s*true|resolveExternals\\s*=\\s*true)"
+
+  - id: php-jwt-weak-secret
+    message: JWT secret appears short or hardcoded.
+    severity: ERROR
+    metadata:
+      category: auth
+      severity: high
+      remediation: Use a long random JWT secret from protected configuration.
+    languages: [php]
+    pattern-regex: "(?i)(jwt_secret|JWT_SECRET|secretOrKey)\\s*[:=]\\s*['\"][^'\"]{1,15}['\"]"
+
+  - id: javascript-jwt-none-algorithm
+    message: JWT code appears to allow the none algorithm.
+    severity: ERROR
+    metadata:
+      category: auth
+      severity: high
+      remediation: Reject none and allowlist only expected signed algorithms.
+    languages: [javascript, typescript]
+    pattern-regex: "(?i)(algorithm|algorithms)\\s*[:=]\\s*['\"]none['\"]"
+
+  - id: javascript-jwt-missing-expiry
+    message: JWT signing call has no visible expiration option.
+    severity: WARNING
+    metadata:
+      category: auth
+      severity: medium
+      remediation: Set expiresIn/exp for issued tokens.
+    languages: [javascript, typescript]
+    patterns:
+      - pattern: jwt.sign(...)
+      - pattern-not-regex: "expiresIn|exp"
+
+  - id: python-jwt-none-algorithm
+    message: JWT decode/signing appears to allow the none algorithm.
+    severity: ERROR
+    metadata:
+      category: auth
+      severity: high
+      remediation: Reject none and allowlist only expected signed algorithms.
+    languages: [python]
+    pattern-regex: "(?i)(algorithm|algorithms)\\s*=\\s*['\"]none['\"]"
+
+  - id: python-requests-verify-false
+    message: Outbound HTTPS request disables TLS certificate verification.
+    severity: WARNING
+    metadata:
+      category: config
+      severity: medium
+      remediation: Keep TLS verification enabled and fix certificate/trust-store issues.
+    languages: [python]
+    pattern-regex: "requests\\.(get|post|put|delete|request)\\([^\\n]*verify\\s*=\\s*False"
+
+  - id: python-ssrf-user-controlled-url
+    message: Server-side request appears to use user-controlled URL input.
+    severity: ERROR
+    metadata:
+      category: web
+      severity: high
+      remediation: Allowlist outbound hosts and block private, loopback, and cloud metadata IP ranges.
+    languages: [python]
+    pattern-regex: "(requests\\.(get|post)|urllib\\.request\\.urlopen|httpx\\.(get|post)).*(request|args|form|query|url)"
+
+  - id: python-xxe-unsafe-parser
+    message: XML parser may resolve external entities.
+    severity: ERROR
+    metadata:
+      category: web
+      severity: high
+      remediation: Use defusedxml or disable entity resolution for untrusted XML.
+    languages: [python]
+    pattern-regex: "(lxml|etree|ElementTree|sax|minidom).*(resolve_entities\\s*=\\s*True|load_dtd\\s*=\\s*True)"
+
+  - id: html-external-script-missing-sri
+    message: External script lacks Subresource Integrity.
+    severity: INFO
+    metadata:
+      category: web
+      severity: low
+      remediation: Add integrity/crossorigin attributes or self-host trusted scripts.
+    languages: [html]
+    pattern-regex: "<script[^>]+src=[\"']https?://(?![^>]*integrity=)"
+
+  - id: llm-output-rendered-as-html
+    message: LLM output appears to be rendered as HTML.
+    severity: WARNING
+    metadata:
+      category: ai
+      severity: medium
+      remediation: Render LLM output as text or sanitize with a strict allowlist before HTML rendering.
+    languages: [javascript, typescript, python]
+    pattern-regex: "(?i)(innerHTML|dangerouslySetInnerHTML|v-html|mark_safe|safe).*(llm|openai|completion|assistant|model_output)"

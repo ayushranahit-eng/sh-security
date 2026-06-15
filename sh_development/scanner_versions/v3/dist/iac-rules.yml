@@ -1,0 +1,338 @@
+rules:
+  - id: terraform-security-group-open-world
+    message: Security group allows ingress from 0.0.0.0/0.
+    severity: ERROR
+    metadata:
+      category: iac
+      severity: high
+      remediation: Restrict ingress CIDR ranges to trusted networks.
+    languages: [hcl]
+    pattern-regex: 'cidr_blocks\s*=\s*\[[^\]]*"0\.0\.0\.0/0"'
+
+  - id: terraform-public-s3-policy
+    message: S3 policy grants public access.
+    severity: ERROR
+    metadata:
+      category: iac
+      severity: high
+      remediation: Remove public principals and enforce bucket public access blocks.
+    languages: [hcl]
+    pattern-regex: 'Principal\s*=\s*"\*"'
+
+  - id: terraform-unencrypted-rds-or-ebs
+    message: RDS/EBS resource appears to disable encryption.
+    severity: ERROR
+    metadata:
+      category: iac
+      severity: high
+      remediation: Enable storage/volume encryption.
+    languages: [hcl]
+    pattern-regex: '(storage_encrypted|encrypted)\s*=\s*false'
+
+  - id: terraform-iam-wildcard-policy
+    message: IAM policy uses wildcard action or resource.
+    severity: WARNING
+    metadata:
+      category: iac
+      severity: medium
+      remediation: Scope IAM actions and resources to the minimum required.
+    languages: [hcl, json]
+    pattern-regex: '"(Action|Resource)"\s*:\s*"?\*"'
+
+  - id: kubernetes-privileged-container
+    message: Kubernetes container runs privileged.
+    severity: ERROR
+    metadata:
+      category: iac
+      severity: high
+      remediation: "Set privileged: false and use least-privilege securityContext settings."
+    languages: [yaml]
+    pattern-regex: 'privileged:\s*true'
+
+  - id: kubernetes-missing-security-context
+    message: Kubernetes workload appears to omit securityContext.
+    severity: INFO
+    metadata:
+      category: iac
+      severity: low
+      remediation: "Add pod/container securityContext with runAsNonRoot and dropped capabilities."
+    languages: [yaml]
+    patterns:
+      - pattern-regex: 'kind:\s*(Deployment|Pod|StatefulSet|DaemonSet)'
+      - pattern-not-regex: 'securityContext:'
+
+  - id: dockerfile-root-user
+    message: Dockerfile does not set a non-root USER.
+    severity: WARNING
+    metadata:
+      category: iac
+      severity: medium
+      remediation: Add a non-root user and switch to it with USER.
+    languages: [dockerfile]
+    patterns:
+      - pattern-regex: '^FROM\s+'
+      - pattern-not-regex: '^USER\s+[^0]'
+
+  - id: dockerfile-add-instead-of-copy
+    message: Dockerfile uses ADD where COPY is usually safer.
+    severity: INFO
+    metadata:
+      category: iac
+      severity: low
+      remediation: Use COPY unless archive extraction or remote URL handling is required.
+    languages: [dockerfile]
+    pattern-regex: '^ADD\s+'
+
+  - id: dockerfile-secret-build-arg
+    message: Docker build arg/env appears to contain a secret.
+    severity: ERROR
+    metadata:
+      category: iac
+      severity: high
+      remediation: Pass secrets through build secrets or runtime secret stores, not ARG/ENV.
+    languages: [dockerfile]
+    pattern-regex: '(?i)^(ARG|ENV)\s+.*(secret|token|password|api_key)'
+
+  - id: dockerfile-chmod-777
+    message: Dockerfile grants world-writable permissions.
+    severity: ERROR
+    metadata:
+      category: iac
+      severity: high
+      remediation: Avoid chmod 777. Grant the smallest required permission to the specific user/group.
+    languages: [dockerfile]
+    pattern-regex: '(?i)^RUN\s+.*chmod\s+(-R\s+)?777\b'
+
+  - id: github-actions-secret-echo
+    message: CI/CD workflow appears to echo or hardcode a secret value.
+    severity: ERROR
+    metadata:
+      category: cicd
+      severity: high
+      remediation: Use CI secret stores and avoid printing secrets in logs.
+    languages: [yaml]
+    pattern-regex: '(?i)(AWS_SECRET_ACCESS_KEY|API_KEY|TOKEN|PASSWORD|SECRET)\s*='
+
+  - id: config-debug-enabled
+    message: Debug mode appears enabled in configuration.
+    severity: WARNING
+    metadata:
+      category: config
+      severity: medium
+      remediation: Disable debug mode outside local development.
+    languages: [yaml, json, hcl]
+    pattern-regex: '(?i)(debug|development_mode)\s*[:=]\s*(true|1|yes)'
+
+  - id: config-cors-wildcard
+    message: Configuration appears to allow wildcard CORS origins.
+    severity: WARNING
+    metadata:
+      category: config
+      severity: medium
+      remediation: Restrict CORS origins to trusted application domains.
+    languages: [yaml, json]
+    pattern-regex: '(?i)(cors|allowed_origins|allow_origins).*(\*|all)'
+
+  - id: kubernetes-host-path-volume
+    message: Kubernetes workload uses hostPath volume.
+    severity: WARNING
+    metadata:
+      category: iac
+      severity: medium
+      remediation: Avoid hostPath volumes unless strictly required and tightly constrained.
+    languages: [yaml]
+    pattern-regex: 'hostPath:'
+
+  - id: kubernetes-run-as-root
+    message: Kubernetes container appears configured to run as root.
+    severity: ERROR
+    metadata:
+      category: iac
+      severity: high
+      remediation: Set runAsNonRoot=true and use a non-root runAsUser.
+    languages: [yaml]
+    pattern-regex: 'runAsUser:\s*0'
+
+  - id: kubernetes-latest-image-tag
+    message: Kubernetes image uses the latest tag.
+    severity: INFO
+    metadata:
+      category: iac
+      severity: low
+      remediation: Pin container images to explicit immutable versions.
+    languages: [yaml]
+    pattern-regex: 'image:\s*[^:\s]+:latest'
+
+  - id: terraform-public-rds
+    message: RDS instance appears publicly accessible.
+    severity: ERROR
+    metadata:
+      category: iac
+      severity: high
+      remediation: Set publicly_accessible=false unless there is a strong documented reason.
+    languages: [hcl]
+    pattern-regex: 'publicly_accessible\s*=\s*true'
+
+  - id: terraform-s3-public-acl
+    message: S3 bucket ACL appears public.
+    severity: ERROR
+    metadata:
+      category: iac
+      severity: high
+      remediation: Avoid public-read/public-read-write ACLs and use explicit least-privilege policies.
+    languages: [hcl]
+    pattern-regex: 'acl\s*=\s*"(public-read|public-read-write)"'
+
+  - id: terraform-disabled-deletion-protection
+    message: Deletion protection appears disabled.
+    severity: WARNING
+    metadata:
+      category: iac
+      severity: medium
+      remediation: Enable deletion protection for production databases and critical resources.
+    languages: [hcl]
+    pattern-regex: 'deletion_protection\s*=\s*false'
+
+  - id: github-actions-pull-request-target-checkout
+    message: CI workflow uses pull_request_target with checkout, which can be risky.
+    severity: WARNING
+    metadata:
+      category: cicd
+      severity: medium
+      remediation: Avoid checking out untrusted PR code in pull_request_target workflows.
+    languages: [yaml]
+    patterns:
+      - pattern-regex: 'pull_request_target'
+      - pattern-regex: 'actions/checkout'
+
+  - id: github-actions-unpinned-action
+    message: CI action is not pinned to a full commit SHA.
+    severity: INFO
+    metadata:
+      category: cicd
+      severity: low
+      remediation: Pin third-party GitHub Actions to a trusted commit SHA.
+    languages: [yaml]
+    pattern-regex: 'uses:\s*[^@\s]+@(?:main|master|v[0-9]+)'
+
+  - id: terraform-security-group-all-ports-open
+    message: Security group appears to expose all ports to the internet.
+    severity: ERROR
+    metadata:
+      category: iac
+      severity: high
+      remediation: Restrict CIDR ranges and ports to the minimum required.
+    languages: [hcl]
+    pattern-regex: '(from_port\s*=\s*0|to_port\s*=\s*0|protocol\s*=\s*"-1")[\s\S]{0,300}cidr_blocks\s*=\s*\[[^\]]*"0\.0\.0\.0/0"'
+
+  - id: terraform-s3-public-access-block-disabled
+    message: S3 public access block appears disabled.
+    severity: ERROR
+    metadata:
+      category: iac
+      severity: high
+      remediation: Keep block_public_acls, block_public_policy, ignore_public_acls, and restrict_public_buckets enabled.
+    languages: [hcl]
+    pattern-regex: '(block_public_acls|block_public_policy|ignore_public_acls|restrict_public_buckets)\s*=\s*false'
+
+  - id: terraform-cloudtrail-disabled-or-missing-validation
+    message: CloudTrail appears disabled or lacks log validation.
+    severity: WARNING
+    metadata:
+      category: iac
+      severity: medium
+      remediation: Enable CloudTrail and log file validation for audit integrity.
+    languages: [hcl]
+    pattern-regex: '(enable_logging\s*=\s*false|enable_log_file_validation\s*=\s*false)'
+
+  - id: terraform-guardduty-disabled
+    message: GuardDuty detector appears disabled.
+    severity: WARNING
+    metadata:
+      category: iac
+      severity: medium
+      remediation: Enable GuardDuty or equivalent threat detection in production accounts.
+    languages: [hcl]
+    pattern-regex: 'aws_guardduty_detector[\s\S]{0,200}enable\s*=\s*false'
+
+  - id: terraform-public-snapshot-or-ami
+    message: Snapshot or AMI appears public.
+    severity: ERROR
+    metadata:
+      category: iac
+      severity: high
+      remediation: Keep snapshots and AMIs private unless intentionally published.
+    languages: [hcl]
+    pattern-regex: '(create_volume_permission|launch_permission|group\s*=\s*"all"|groups\s*=\s*\[[^\]]*"all")'
+
+  - id: terraform-public-elasticsearch
+    message: Elasticsearch/OpenSearch access policy appears public.
+    severity: ERROR
+    metadata:
+      category: iac
+      severity: high
+      remediation: Restrict OpenSearch/Elasticsearch access policies to trusted principals and networks.
+    languages: [hcl, json]
+    pattern-regex: '("es:\*"|"Action"\s*:\s*"es:)[\s\S]{0,500}"Principal"\s*:\s*"\*"'
+
+  - id: kubernetes-service-loadbalancer
+    message: Kubernetes service exposes a LoadBalancer.
+    severity: INFO
+    metadata:
+      category: iac
+      severity: low
+      remediation: Confirm LoadBalancer services are intentional and protected by auth/network controls.
+    languages: [yaml]
+    pattern-regex: 'type:\s*LoadBalancer'
+
+  - id: kubernetes-capabilities-add-all
+    message: Container adds broad Linux capabilities.
+    severity: ERROR
+    metadata:
+      category: iac
+      severity: high
+      remediation: Drop all capabilities and add back only the minimum required.
+    languages: [yaml]
+    pattern-regex: 'add:\s*\[[^\]]*(ALL|SYS_ADMIN|NET_ADMIN)'
+
+  - id: dockerfile-curl-bash-installer
+    message: Dockerfile pipes remote content into a shell.
+    severity: WARNING
+    metadata:
+      category: iac
+      severity: medium
+      remediation: Download, verify checksums/signatures, then execute trusted installer content.
+    languages: [dockerfile]
+    pattern-regex: '(curl|wget).*(\|\s*(sh|bash))'
+
+  - id: docker-compose-public-database-port
+    message: Compose file exposes a common database/cache port.
+    severity: WARNING
+    metadata:
+      category: iac
+      severity: medium
+      remediation: Avoid publishing database/cache ports publicly; bind to localhost or private networks.
+    languages: [yaml]
+    pattern-regex: '["'']?(3306|5432|6379|27017|9200|11211):\1["'']?'
+
+  - id: github-actions-cloud-secret-env
+    message: CI workflow exposes cloud credential-like environment variables.
+    severity: ERROR
+    metadata:
+      category: cicd
+      severity: high
+      remediation: Use short-lived OIDC credentials and avoid hardcoded cloud keys in workflows.
+    languages: [yaml]
+    pattern-regex: '(AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|GOOGLE_APPLICATION_CREDENTIALS|AZURE_CLIENT_SECRET)\s*:'
+
+  - id: github-actions-untrusted-script-with-secrets
+    message: CI workflow may run scripts while secrets are available.
+    severity: WARNING
+    metadata:
+      category: cicd
+      severity: medium
+      remediation: Avoid exposing secrets to untrusted pull request code.
+    languages: [yaml]
+    patterns:
+      - pattern-regex: 'pull_request'
+      - pattern-regex: '(secrets\.|env:)'
