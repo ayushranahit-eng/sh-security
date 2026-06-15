@@ -37,7 +37,6 @@ const elements = {
   commandFallback: document.getElementById("commandFallback"),
   commandFallbackOutput: document.getElementById("commandFallbackOutput"),
   copyCommandButton: document.getElementById("copyCommandButton"),
-  copyFallbackCommandButton: document.getElementById("copyFallbackCommandButton"),
   timelineContainer: document.getElementById("timelineContainer"),
   pollingBadge: document.getElementById("pollingBadge"),
   headerProject: document.getElementById("headerProject"),
@@ -585,16 +584,6 @@ function bindEvents() {
       await navigator.clipboard.writeText(elements.commandOutput.textContent);
       elements.copyCommandButton.textContent = "Copied";
       window.setTimeout(() => { elements.copyCommandButton.textContent = "Copy command"; }, 1200);
-    } catch (error) {
-      alert("Could not copy command.");
-    }
-  });
-
-  elements.copyFallbackCommandButton.addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(elements.commandFallbackOutput.textContent);
-      elements.copyFallbackCommandButton.textContent = "Copied";
-      window.setTimeout(() => { elements.copyFallbackCommandButton.textContent = "Copy alternative"; }, 1200);
     } catch (error) {
       alert("Could not copy command.");
     }
